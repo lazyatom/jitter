@@ -5,6 +5,7 @@ require 'xmpp4r-simple'
 require 'twitter'
 require 'yaml'
 require 'tempfile'
+require 'cgi'
 
 config = YAML.load_file(File.expand_path("~/.jitter.yaml"))
 
@@ -41,7 +42,7 @@ timeline = Thread.new do
     messages.each do |status|
       config[:accept_from].each do |user|
         puts "sending to #{user}"
-        im.deliver(user, "[#{status.user.name}] #{status.text}") rescue nil
+        im.deliver(user, "[#{status.user.name}] #{CGI.unscapeHTML(status.text)}") rescue nil
       end
     end
     sleep(30)
