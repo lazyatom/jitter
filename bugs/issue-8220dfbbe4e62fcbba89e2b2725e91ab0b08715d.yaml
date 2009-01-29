@@ -19,3 +19,7 @@ log_events:
   - James Adam <james@lazyatom.com>
   - created
   - ""
+- - 2009-01-29 17:28:37.759033 Z
+  - James Adam <james@lazyatom.com>
+  - commented
+  - It seems to crash even when i don't tweet - some bug not being caught?
