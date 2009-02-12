@@ -41,6 +41,13 @@ class JitterTest < Test::Unit::TestCase
       @twitter.expects(:post).never
       @jitter.post_update_to_twitter
     end
+    
+    should "not update twitter if the message matches the last status" do
+      @jitter.stubs(:current_status).returns("is happy")
+      @jabber.stubs(:presence_updates).yields(["james@lazyatom.com", :away, "is happy"])
+      @twitter.expects(:post).never
+      @jitter.post_update_to_twitter
+    end
   end
   
   context "when listening to twitter" do
