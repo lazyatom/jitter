@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 require 'rubygems'
 require 'daemons'
+require File.join(File.dirname(__FILE__), "jitter")
 
-Daemons.run(File.join(File.dirname(__FILE__), 'jitter.rb'))
+Daemons.daemonize
+Jitter.start

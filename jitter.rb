@@ -13,7 +13,7 @@ class Jitter
     @config = config
     @jabber = Jabber::Simple.new(config[:jabber][:account], config[:jabber][:password])
     @twitter = Twitter::Base.new(config[:twitter][:account], config[:twitter][:password])
-    @log = Logger.new($stdout)
+    @log = Logger.new("/dev/null")
     log.level = Logger::INFO
   end
 
@@ -69,11 +69,7 @@ class Jitter
     File.expand_path("~/.jitter.last_seen")
   end
   
-end
-
-if __FILE__ == $0
-
-  def every(seconds)
+  def self.every(seconds)
     Thread.new do
       loop do
         yield
@@ -82,9 +78,13 @@ if __FILE__ == $0
     end
   end
   
-  jitter = Jitter.new
-  [
-    every(1) { jitter.post_update_to_twitter }, 
-    every(30) { jitter.post_tweets_to_im }
-  ].map { |t| t.join }
+  def self.start
+    jitter = Jitter.new
+    [every(1) { jitter.post_update_to_twitter }, 
+     every(30) { jitter.post_tweets_to_im }].map { |t| t.join }
+  end
+end
+
+if __FILE__ == $0
+  Jitter.start
 end
