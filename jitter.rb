@@ -5,48 +5,55 @@ require 'xmpp4r-simple'
 require 'twitter'
 require 'yaml'
 require 'cgi'
+require 'logger'
 
 class Jitter
-  attr_reader :current_status, :jabber, :twitter, :config
+  attr_reader :current_status, :jabber, :twitter, :config, :log
   def initialize(config=YAML.load_file(File.expand_path("~/.jitter.yaml")))
     @config = config
     @jabber = Jabber::Simple.new(config[:jabber][:account], config[:jabber][:password])
     @twitter = Twitter::Base.new(config[:twitter][:account], config[:twitter][:password])
+    @log = Logger.new($stdout)
+    log.level = Logger::INFO
   end
 
   def post_update_to_twitter
-    jabber.presence_updates do |update|
-      account, presence, message = update
-      if config[:accept_from].include?(account) && message && message != current_status
-        self.current_status = message
+    log.debug "checking updates."
+    jabber.received_messages do |message|
+      log.info "Received from #{message.from.strip}: #{message}"
+      if config[:accept_from].include?(message.from.strip.to_s)
+        tweet(message.body)
+      else
+        log.warn "Message from an unknown source (#{message.from.strip}); only accepting from #{config[:accept_from].join(", ")}"
       end
     end
+  rescue StandardError => e
+    log.error e
   end
 
   def post_tweets_to_im
+    log.debug "sending updates."
     new_messages(twitter).each do |tweet|
-      config[:accept_from].each do |user|
-        send_tweet_to_jabber(tweet, user)
-      end
+      say(tweet)
+    end
+  rescue StandardError => e
+    log.error e
+  end
+  
+  def tweet(status)
+    log.info "Posting '#{status}'"
+    twitter.post(status, :source => "JitterBot")
+  end
+  
+  def say(tweet)
+    message = CGI.unescapeHTML(tweet.text)
+    config[:accept_from].each do |jabber_account|
+      jabber.deliver(jabber_account, "[#{tweet.user.name}] #{message}")
     end
   end
-  
-  def current_status=(status)
-    twitter.post(status, :source => "JitterBot")
-    File.open(current_status_path, 'w') { |f| f.write status }
-  end
-  
-  def current_status
-    File.read(current_status_path) rescue nil
-  end
-  
+
   private
   
-  def send_tweet_to_jabber(tweet, jabber_account)
-    message = CGI.unescapeHTML(tweet.text)
-    jabber.deliver(jabber_account, "[#{tweet.user.name}] #{message}")   
-  end
-
   def new_messages(twitter)
     last_seen = Time.parse(File.read(last_seen_path)) rescue Time.new - (60*60*24) # yesterday
     messages = twitter.timeline.select { |status| Time.parse(status.created_at) > last_seen }.reverse
@@ -62,34 +69,22 @@ class Jitter
     File.expand_path("~/.jitter.last_seen")
   end
   
-  def current_status_path
-    File.expand_path("~/.jitter.status")
-  end
-  
 end
 
 if __FILE__ == $0
-  jitter = Jitter.new
-  [
+
+  def every(seconds)
     Thread.new do
       loop do
-        begin
-          jitter.post_update_to_twitter
-        rescue Error => e
-          puts "error: #{e}"
-        end
-        sleep(1)
-      end
-    end, 
-    Thread.new do
-      loop do
-        begin
-          jitter.post_tweets_to_im
-        rescue Error => e
-          puts "error: #{e}"
-        end
-        sleep(30)
+        yield
+        sleep(seconds)
       end
     end
+  end
+  
+  jitter = Jitter.new
+  [
+    every(1) { jitter.post_update_to_twitter }, 
+    every(30) { jitter.post_tweets_to_im }
   ].map { |t| t.join }
 end
