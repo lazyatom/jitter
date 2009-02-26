@@ -48,7 +48,14 @@ class Jitter
   def say(tweet)
     message = CGI.unescapeHTML(tweet.text)
     config[:accept_from].each do |jabber_account|
-      jabber.deliver(jabber_account, "[#{tweet.user.name}] #{message}")
+      message_text = case tweet
+      when Twitter::Status
+        "_#{tweet.user.screen_name}_   #{message}"
+      when Twitter::DirectMessage
+        "*DM* _#{tweet.sender_screen_name}_   #{message}"
+      end
+      log.debug "Sending: #{message_text}"
+      jabber.deliver(jabber_account, message_text)
     end
   end
 
@@ -56,13 +63,17 @@ class Jitter
   
   def new_messages(twitter)
     last_seen = Time.parse(File.read(last_seen_path)) rescue Time.new - (60*60*24) # yesterday
-    messages = twitter.timeline.select { |status| Time.parse(status.created_at) > last_seen }.reverse
+    messages = all_twitter_messages.select { |status| Time.parse(status.created_at) > last_seen }
     if messages.any?
       File.open(last_seen_path, 'w') do |f| 
         f.write messages.last.created_at
       end
     end
     messages
+  end
+  
+  def all_twitter_messages
+    (twitter.timeline + twitter.direct_messages).sort_by { |tweet| Time.parse(tweet.created_at) }
   end
   
   def last_seen_path
