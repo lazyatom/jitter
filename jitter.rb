@@ -53,7 +53,7 @@ class Jitter
     config[:accept_from].each do |jabber_account|
       message_text = case tweet
       when Twitter::Status
-        "_#{tweet.user.screen_name}_\n#{message}"
+        "_#{tweet.user.screen_name} (#{tweet.user.name})_\n#{message}"
       when Twitter::DirectMessage
         "*DM* _#{tweet.sender_screen_name}_\n#{message}"
       end
