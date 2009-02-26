@@ -13,8 +13,7 @@ class Jitter
     @config = config
     @jabber = Jabber::Simple.new(config[:jabber][:account], config[:jabber][:password])
     @twitter = Twitter::Base.new(config[:twitter][:account], config[:twitter][:password])
-    @log = Logger.new("/dev/null")
-    log.level = Logger::INFO
+    setup_logging
   end
 
   def post_update_to_twitter
@@ -82,6 +81,19 @@ class Jitter
   
   def last_seen_path
     File.expand_path("~/.jitter.last_seen")
+  end
+  
+  def setup_logging
+    logfile = case config[:logfile]
+    when :stdout
+      $stdout
+    when nil
+      "/dev/null"
+    else
+      config[:logfile]
+    end
+    @log = Logger.new(logfile)
+    log.level = config[:log_level] || Logger::INFO
   end
   
   def self.every(seconds)
