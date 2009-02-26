@@ -42,7 +42,11 @@ class Jitter
   
   def tweet(status)
     log.info "Posting '#{status}'"
-    twitter.post(status, :source => "JitterBot")
+    if status =~ /^d\s(\w+)\s(.+)/
+      twitter.d($1, $2)
+    else
+      twitter.post(status, :source => "JitterBot")
+    end
   end
   
   def say(tweet)
