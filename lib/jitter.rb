@@ -93,7 +93,7 @@ class Jitter
   end
   
   def search_messages
-    @config[:searches].map { |s| Twitter::Search.new(s).fetch["results"] }.flatten
+    (@config[:searches] || []).map { |s| Twitter::Search.new(s).fetch["results"] }.flatten
   end
   
   def last_seen_path
