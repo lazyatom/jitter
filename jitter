@@ -1,8 +1,24 @@
 #!/usr/bin/env ruby
 require 'rubygems'
 require 'daemons'
-require File.join(File.dirname(__FILE__), "jitter")
+require 'tmpdir'
+$LOAD_PATH.unshift File.join(File.dirname(__FILE__), 'lib')
+require 'jitter'
 
-Daemons.run_proc('jitter.rb') do
-  Jitter.start
+case ARGV[0]
+when 'config'
+  require 'configuration'
+  exit Jitter::Configuration.new.console
+
+else # Let Daemons handle it.
+  options = {
+    :backtrace => true,
+    :dir => Dir.tmpdir,
+    :dir_mode => :normal,
+    :multiple => false
+  }
+
+  Daemons.run_proc('jitter', options) do
+    Jitter.start
+  end
 end
