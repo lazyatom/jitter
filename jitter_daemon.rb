@@ -3,5 +3,6 @@ require 'rubygems'
 require 'daemons'
 require File.join(File.dirname(__FILE__), "jitter")
 
-Daemons.daemonize
-Jitter.start
+Daemons.run_proc('jitter.rb') do
+  Jitter.start
+end
