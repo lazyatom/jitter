@@ -22,14 +22,17 @@ class Jitter
   end
 
   def post_update_to_twitter
-    log.debug "checking updates."
     jabber.reconnect unless jabber.connected?
     jabber.received_messages do |message|
       log.info "Received from #{message.from.strip}: #{message}"
-      if sender_is_authorized?(message)
-        tweet(message.body)
+      if message.type == :chat
+        if sender_is_authorized?(message)
+          tweet(message.body)
+        else
+          log.warn "Message from an unknown source (#{message.from.strip}); only accepting from #{config[:accept_from].join(", ")}"
+        end
       else
-        log.warn "Message from an unknown source (#{message.from.strip}); only accepting from #{config[:accept_from].join(", ")}"
+        log.warn "Ignoring message; was not chat."
       end
     end
   rescue StandardError => e
@@ -125,7 +128,7 @@ class Jitter
   def self.start
     jitter = Jitter.new
     [every(1) { jitter.post_update_to_twitter }, 
-     every(30) { jitter.post_tweets_to_im }].map { |t| t.join }
+     every(60) { jitter.post_tweets_to_im }].map { |t| t.join }
   end
 end
 
