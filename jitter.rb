@@ -8,8 +8,13 @@ require 'cgi'
 require 'logger'
 
 class Jitter
+  def self.config_path
+    File.expand_path("~/.jitter/config.yaml")
+  end
+  
   attr_reader :current_status, :jabber, :twitter, :config, :log
-  def initialize(config=YAML.load_file(File.expand_path("~/.jitter.yaml")))
+  
+  def initialize(config=YAML.load_file(Jitter.config_path))
     @config = config
     @jabber = Jabber::Simple.new(config[:jabber][:account], config[:jabber][:password])
     @twitter = Twitter::Base.new(config[:twitter][:account], config[:twitter][:password])
@@ -18,9 +23,10 @@ class Jitter
 
   def post_update_to_twitter
     log.debug "checking updates."
+    jabber.reconnect unless jabber.connected?
     jabber.received_messages do |message|
       log.info "Received from #{message.from.strip}: #{message}"
-      if config[:accept_from].include?(message.from.strip.to_s)
+      if sender_is_authorized?(message)
         tweet(message.body)
       else
         log.warn "Message from an unknown source (#{message.from.strip}); only accepting from #{config[:accept_from].join(", ")}"
@@ -31,8 +37,9 @@ class Jitter
   end
 
   def post_tweets_to_im
-    log.debug "sending updates."
-    new_messages(twitter).each do |tweet|
+    messages_to_send = new_messages
+    log.debug "sending #{messages_to_send.length} updates."
+    messages_to_send.each do |tweet|
       say(tweet)
     end
   rescue StandardError => e
@@ -51,12 +58,7 @@ class Jitter
   def say(tweet)
     message = CGI.unescapeHTML(tweet.text)
     config[:accept_from].each do |jabber_account|
-      message_text = case tweet
-      when Twitter::Status
-        "_#{tweet.user.screen_name} (#{tweet.user.name})_\n#{message}"
-      when Twitter::DirectMessage
-        "*DM* _#{tweet.sender_screen_name}_\n#{message}"
-      end
+      message_text = formatted_for_jabber(tweet)
       log.debug "Sending: #{message_text}"
       jabber.deliver(jabber_account, message_text)
     end
@@ -64,23 +66,38 @@ class Jitter
 
   private
   
-  def new_messages(twitter)
-    last_seen = Time.parse(File.read(last_seen_path)) rescue Time.new - (60*60*24) # yesterday
-    messages = all_twitter_messages.select { |status| Time.parse(status.created_at) > last_seen }
-    if messages.any?
-      File.open(last_seen_path, 'w') do |f| 
-        f.write messages.last.created_at
-      end
+  def sender_is_authorized?(message)
+    config[:accept_from].include?(message.from.strip.to_s)
+  end
+  
+  def formatted_for_jabber(tweet)
+    case tweet
+    when Twitter::Status
+      "_#{tweet.user.screen_name} (#{tweet.user.name})_\n#{message}"
+    when Twitter::DirectMessage
+      "*DM* _#{tweet.sender_screen_name}_\n#{message}"
+    when Twitter::SearchResult
+      "_#{tweet.from_user}_\n#{tweet.text}"
     end
+  end
+  
+  def new_messages
+    last_seen = File.read(last_seen_path).to_i rescue 0
+    messages = all_twitter_messages.select { |status| status.id.to_i > last_seen }
+    File.open(last_seen_path, 'w') { |f| f.write messages.last.id } if messages.any?
     messages
   end
   
   def all_twitter_messages
-    (twitter.timeline + twitter.direct_messages).sort_by { |tweet| Time.parse(tweet.created_at) }
+    (twitter.timeline + twitter.direct_messages + search_messages).sort_by { |tweet| Time.parse(tweet.created_at) }
+  end
+  
+  def search_messages
+    @config[:searches].map { |s| Twitter::Search.new(s).fetch["results"] }.flatten
   end
   
   def last_seen_path
-    File.expand_path("~/.jitter.last_seen")
+    File.expand_path("~/.jitter/last_seen_id")
   end
   
   def setup_logging
