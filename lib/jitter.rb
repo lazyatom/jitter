@@ -56,7 +56,6 @@ class Jitter
   end
   
   def say(tweet)
-    message = CGI.unescapeHTML(tweet.text)
     config[:accept_from].each do |jabber_account|
       message_text = formatted_for_jabber(tweet)
       log.debug "Sending: #{message_text}"
@@ -71,6 +70,7 @@ class Jitter
   end
   
   def formatted_for_jabber(tweet)
+    message = CGI.unescapeHTML(tweet.text)
     case tweet
     when Twitter::Status
       "_#{tweet.user.screen_name} (#{tweet.user.name})_\n#{message}"
